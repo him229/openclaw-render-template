@@ -1,72 +1,74 @@
-# OpenClaw Railway Template (1‑click deploy)
+# OpenClaw Render Template (1-click deploy)
 
-This repo packages **OpenClaw** for Railway with a small **/setup** web wizard so users can deploy and onboard **without running any commands**.
+> **Forked from [clawdbot-railway-template](https://github.com/vignesh07/clawdbot-railway-template)** by [@vignesh07](https://github.com/vignesh07)
+>
+> This is an adaptation for [Render.com](https://render.com) deployment.
+
+This repo packages **OpenClaw** for Render with a web-based **/setup** wizard so users can deploy and onboard **without running any commands**.
 
 ## What you get
 
 - **OpenClaw Gateway + Control UI** (served at `/` and `/openclaw`)
 - A friendly **Setup Wizard** at `/setup` (protected by a password)
-- Persistent state via **Railway Volume** (so config/credentials/memory survive redeploys)
-- One-click **Export backup** (so users can migrate off Railway later)
-- **Import backup** from `/setup` (advanced recovery)
+- Persistent state via **Render Disk** (config/credentials/memory survive redeploys)
+- One-click **Export backup** and **Import backup** from `/setup`
 
-## How it works (high level)
+## Deploy to Render
 
-- The container runs a wrapper web server.
-- The wrapper protects `/setup` with `SETUP_PASSWORD`.
-- During setup, the wrapper runs `openclaw onboard --non-interactive ...` inside the container, writes state to the volume, and then starts the gateway.
-- After setup, **`/` is OpenClaw**. The wrapper reverse-proxies all traffic (including WebSockets) to the local gateway process.
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/YOUR_USERNAME/openclaw-render-template)
 
-## Railway deploy instructions (what you’ll publish as a Template)
+> **Note:** Replace `YOUR_USERNAME` with your GitHub username after forking.
 
-In Railway Template Composer:
+### What happens when you click Deploy:
 
-1) Create a new template from this GitHub repo.
-2) Add a **Volume** mounted at `/data`.
-3) Set the following variables:
+1. Render creates a new service from the `render.yaml` Blueprint
+2. You'll be prompted to set `SETUP_PASSWORD`
+3. Docker image builds and deploys
+4. Visit `https://<your-service>.onrender.com/setup` to complete onboarding
 
-Required:
-- `SETUP_PASSWORD` — user-provided password to access `/setup`
+## Environment Variables
 
-Recommended:
-- `OPENCLAW_STATE_DIR=/data/.openclaw`
-- `OPENCLAW_WORKSPACE_DIR=/data/workspace`
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SETUP_PASSWORD` | Yes | Password to access `/setup` wizard |
+| `NODE_OPTIONS` | Recommended | Memory limit: `--max-old-space-size=400` (Starter) or `1800` (Standard) |
+| `OPENCLAW_STATE_DIR` | Auto-set | `/data/.openclaw` |
+| `OPENCLAW_WORKSPACE_DIR` | Auto-set | `/data/workspace` |
+| `OPENCLAW_GATEWAY_TOKEN` | Auto-generated | Secure token for gateway auth |
 
-Optional:
-- `OPENCLAW_GATEWAY_TOKEN` — if not set, the wrapper generates one (not ideal). In a template, set it using a generated secret.
+### Choosing a Render Plan
 
-Notes:
-- This template pins OpenClaw to a known-good version by default via Docker build arg `OPENCLAW_GIT_REF`.
-- **Backward compatibility:** The wrapper includes a shim for `CLAWDBOT_*` environment variables (logs a deprecation warning when used). `MOLTBOT_*` variables are **not** shimmed — this repo never shipped with MOLTBOT prefixes, so no existing deployments rely on them.
+| Plan | RAM | NODE_OPTIONS Value |
+|------|-----|-------------------|
+| Starter ($7/mo) | 512MB | `--max-old-space-size=400` |
+| Standard ($25/mo) | 2GB | `--max-old-space-size=1800` |
 
-4) Enable **Public Networking** (HTTP). Railway will assign a domain.
-   - This service is configured to listen on port `8080` (including custom domains).
-5) Deploy.
+The Blueprint defaults to Starter. To use Standard, change `plan: standard` in `render.yaml` and update `NODE_OPTIONS`.
 
-Then:
-- Visit `https://<your-app>.up.railway.app/setup`
-- Complete setup
-- Visit `https://<your-app>.up.railway.app/` and `/openclaw`
+## How it works
 
-## Getting chat tokens (so you don’t have to scramble)
+1. The container runs a wrapper web server on port 8080
+2. The wrapper protects `/setup` with `SETUP_PASSWORD`
+3. During setup, the wrapper runs `openclaw onboard --non-interactive ...`
+4. After setup, all traffic proxies to the local OpenClaw gateway
+
+## Getting chat tokens
 
 ### Telegram bot token
-1) Open Telegram and message **@BotFather**
-2) Run `/newbot` and follow the prompts
-3) BotFather will give you a token that looks like: `123456789:AA...`
-4) Paste that token into `/setup`
+1. Open Telegram and message **@BotFather**
+2. Run `/newbot` and follow the prompts
+3. Copy the token (looks like: `123456789:AA...`)
 
 ### Discord bot token
-1) Go to the Discord Developer Portal: https://discord.com/developers/applications
-2) **New Application** → pick a name
-3) Open the **Bot** tab → **Add Bot**
-4) Copy the **Bot Token** and paste it into `/setup`
-5) Invite the bot to your server (OAuth2 URL Generator → scopes: `bot`, `applications.commands`; then choose permissions)
+1. Go to [Discord Developer Portal](https://discord.com/developers/applications)
+2. **New Application** → pick a name
+3. Open **Bot** tab → **Add Bot** → copy the **Bot Token**
+4. Enable **MESSAGE CONTENT INTENT** in Bot → Privileged Gateway Intents
 
-## Local smoke test
+## Local testing
 
 ```bash
-docker build -t openclaw-railway-template .
+docker build -t openclaw-render-test .
 
 docker run --rm -p 8080:8080 \
   -e PORT=8080 \
@@ -74,25 +76,15 @@ docker run --rm -p 8080:8080 \
   -e OPENCLAW_STATE_DIR=/data/.openclaw \
   -e OPENCLAW_WORKSPACE_DIR=/data/workspace \
   -v $(pwd)/.tmpdata:/data \
-  openclaw-railway-template
+  openclaw-render-test
 
 # open http://localhost:8080/setup (password: test)
 ```
 
+## License
+
+MIT - See [LICENSE](LICENSE)
+
 ---
 
-## Official template / endorsements
-
-- Officially recommended by OpenClaw: <https://docs.openclaw.ai/railway>
-- Railway announcement (official): [Railway tweet announcing 1‑click OpenClaw deploy](https://x.com/railway/status/2015534958925013438)
-
-  ![Railway official tweet screenshot](assets/railway-official-tweet.jpg)
-
-- Endorsement from Railway CEO: [Jake Cooper tweet endorsing the OpenClaw Railway template](https://x.com/justjake/status/2015536083514405182)
-
-  ![Jake Cooper endorsement tweet screenshot](assets/railway-ceo-endorsement.jpg)
-
-- Created and maintained by **Vignesh N (@vignesh07)**
-- **1800+ deploys on Railway and counting** [Link to template on Railway](https://railway.com/deploy/clawdbot-railway-template)
-
-![Railway template deploy count](assets/railway-deploys.jpg)
+**Original template by [@vignesh07](https://github.com/vignesh07)** • Render adaptation maintained by [YOUR_NAME]
