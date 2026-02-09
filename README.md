@@ -15,7 +15,7 @@ This repo packages **OpenClaw** for Render with a web-based **/setup** wizard so
 
 ## Deploy to Render
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/YOUR_USERNAME/openclaw-render-template)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/him229/openclaw-render-template)
 
 > **Note:** Replace `YOUR_USERNAME` with your GitHub username after forking.
 
@@ -87,4 +87,4 @@ MIT - See [LICENSE](LICENSE)
 
 ---
 
-**Original template by [@vignesh07](https://github.com/vignesh07)** • Render adaptation maintained by [YOUR_NAME]
+**Original template by [@vignesh07](https://github.com/vignesh07)** • Render adaptation by [@him229](https://github.com/him229)
