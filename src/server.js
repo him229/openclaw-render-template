@@ -33,7 +33,7 @@ function getEnvWithShim(primaryKey, deprecatedKey) {
   return deprecated;
 }
 
-// Railway deployments sometimes inject PORT=3000 by default. We want the wrapper to
+// deployments sometimes inject PORT=3000 by default. We want the wrapper to
 // reliably listen on 8080 unless explicitly overridden.
 //
 // Prefer OPENCLAW_PUBLIC_PORT (set in the Dockerfile / template) over PORT.
@@ -223,7 +223,7 @@ function requireSetupAuth(req, res, next) {
     return res
       .status(500)
       .type("text/plain")
-      .send("SETUP_PASSWORD is not set. Set it in Railway Variables before using /setup.");
+      .send("SETUP_PASSWORD is not set. Set it in your environment variables before using /setup.");
   }
 
   const header = req.headers.authorization || "";
@@ -246,7 +246,7 @@ const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
 
-// Minimal health endpoint for Railway.
+// Minimal health endpoint
 app.get("/setup/healthz", (_req, res) => res.json({ ok: true }));
 
 app.get("/setup/app.js", requireSetupAuth, (_req, res) => {
@@ -303,6 +303,7 @@ app.get("/setup", requireSetupAuth, (_req, res) => {
         <option value="gateway.restart">gateway.restart (wrapper-managed)</option>
         <option value="gateway.stop">gateway.stop (wrapper-managed)</option>
         <option value="gateway.start">gateway.start (wrapper-managed)</option>
+        <option value="devices.approve">devices.approve (fix pairing error)</option>
         <option value="openclaw.status">openclaw status</option>
         <option value="openclaw.health">openclaw health</option>
         <option value="openclaw.doctor">openclaw doctor</option>
@@ -706,6 +707,9 @@ const ALLOWED_CONSOLE_COMMANDS = new Set([
   "gateway.stop",
   "gateway.start",
 
+  // Device management
+  "devices.approve",
+
   // OpenClaw CLI helpers
   "openclaw.version",
   "openclaw.status",
@@ -740,6 +744,49 @@ app.post("/setup/api/console/run", requireSetupAuth, async (req, res) => {
     if (cmd === "gateway.start") {
       const r = await ensureGatewayRunning();
       return res.json({ ok: Boolean(r.ok), output: r.ok ? "Gateway started.\n" : `Gateway not started: ${r.reason}\n` });
+    }
+
+    // Fix "disconnected (1008): pairing required" by patching pending.json
+    if (cmd === "devices.approve") {
+      const devicesDir = path.join(STATE_DIR, "devices");
+      const pendingPath = path.join(devicesDir, "pending.json");
+      let output = "";
+      try {
+        if (!fs.existsSync(pendingPath)) {
+          return res.json({ ok: false, output: `No pending devices file found at ${pendingPath}\n` });
+        }
+        const raw = fs.readFileSync(pendingPath, "utf8");
+        output += `Before:\n${raw}\n`;
+        const data = JSON.parse(raw);
+        let changed = false;
+        // Handle both object and array formats
+        if (Array.isArray(data)) {
+          for (const entry of data) {
+            if (entry && entry.silent === false) { entry.silent = true; changed = true; }
+          }
+        } else if (typeof data === "object" && data !== null) {
+          if (data.silent === false) { data.silent = true; changed = true; }
+          // Also check nested entries
+          for (const key of Object.keys(data)) {
+            if (data[key] && typeof data[key] === "object" && data[key].silent === false) {
+              data[key].silent = true;
+              changed = true;
+            }
+          }
+        }
+        if (!changed) {
+          output += "No pending devices with silent=false found. Already approved or different format.\n";
+          return res.json({ ok: true, output });
+        }
+        fs.writeFileSync(pendingPath, JSON.stringify(data, null, 2), "utf8");
+        output += `After:\n${JSON.stringify(data, null, 2)}\n\nPatched silent=true. Restarting gateway...\n`;
+        await restartGateway();
+        output += "Gateway restarted. Refresh the OpenClaw Control UI.\n";
+        return res.json({ ok: true, output });
+      } catch (err) {
+        output += `Error: ${String(err)}\n`;
+        return res.status(500).json({ ok: false, output });
+      }
     }
 
     if (cmd === "openclaw.version") {
@@ -929,7 +976,7 @@ app.post("/setup/import", requireSetupAuth, async (req, res) => {
       return res
         .status(400)
         .type("text/plain")
-        .send("Import is only supported when OPENCLAW_STATE_DIR and OPENCLAW_WORKSPACE_DIR are under /data (Railway volume).\n");
+        .send("Import is only supported when OPENCLAW_STATE_DIR and OPENCLAW_WORKSPACE_DIR are under /data \n");
     }
 
     // Stop gateway before restore so we don't overwrite live files.
