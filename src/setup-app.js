@@ -74,18 +74,24 @@
   function refreshStatus() {
     setStatus('Loading...');
     return httpJson('/setup/api/status').then(function (j) {
-      var ver = j.openclawVersion ? (' | ' + j.openclawVersion) : '';
-      setStatus((j.configured ? 'Configured - open /openclaw' : 'Not configured - run setup below') + ver);
+      // Instant: render auth groups and config state immediately (no CLI spawns).
+      setStatus(j.configured ? 'Configured - open /openclaw' : 'Not configured - run setup below');
       renderAuth(j.authGroups || []);
-      // If channels are unsupported, surface it for debugging.
-      if (j.channelsAddHelp && j.channelsAddHelp.indexOf('telegram') === -1) {
-        logEl.textContent += '\nNote: this openclaw build does not list telegram in `channels add --help`. Telegram auto-add will be skipped.\n';
-      }
 
       // Attempt to load config editor content if present.
       if (configReloadEl && configTextEl) {
         loadConfigRaw();
       }
+
+      // Background: fetch slow CLI details (version, channels help) without blocking.
+      httpJson('/setup/api/status/details').then(function (d) {
+        if (d.openclawVersion) {
+          setStatus((j.configured ? 'Configured - open /openclaw' : 'Not configured - run setup below') + ' | ' + d.openclawVersion);
+        }
+        if (d.channelsAddHelp && d.channelsAddHelp.indexOf('telegram') === -1) {
+          logEl.textContent += '\nNote: this openclaw build does not list telegram in `channels add --help`. Telegram auto-add will be skipped.\n';
+        }
+      }).catch(function () { /* details are optional */ });
 
     }).catch(function (e) {
       setStatus('Error: ' + String(e));

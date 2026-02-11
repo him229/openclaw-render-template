@@ -14,5 +14,8 @@ npm-debug.log*
 # Docs (local only)
 architecture.md
 
+# Local Docker data
+.tmpdata/
+
 # OS
 .DS_Store
